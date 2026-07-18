@@ -1,0 +1,65 @@
+# Build artifacts
+build/
+*.o
+*.so
+*.a
+*.dylib
+*.dll
+*.lib
+*.exp
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+*.cmake
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+*.gcda
+*.gcno
+*.gcov
+coverage/
+*.profraw
+*.profdata
+
+# Benchmarks
+*.json
+*.csv
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/*.col
+/tmp/*.segment
+/tmp/*.delta
+
+# Logs
+*.log
+
+# Compiled Python
+__pycache__/
+*.pyc
+
+# Environment
+.env
+.env.local
+
+# Editor
+*.orig
+*.bak

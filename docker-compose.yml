@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  columnarstore:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: columnarstore
+    volumes:
+      - .:/opt/columnarstore
+    working_dir: /opt/columnarstore
+    command: /bin/bash
+    environment:
+      - CC=gcc
+      - CXX=g++
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
