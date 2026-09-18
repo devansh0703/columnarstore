@@ -92,7 +92,7 @@ class ForDecoder {
     using UnsignedType = typename std::make_unsigned<ValueType>::type;
     
 public:
-    void Decode(const void* data, size_t size, ValueType* out, size_t count) {
+    void Decode(const void* data, size_t /*size*/, ValueType* out, size_t count) {
         if (count == 0) return;
         
         const uint8_t* src = static_cast<const uint8_t*>(data);
@@ -153,7 +153,7 @@ public:
     }
     
 private:
-    void DecodeAvx512_32(const void* data, size_t size, int32_t* out, size_t count) {
+    void DecodeAvx512_32(const void* data, size_t /*size*/, int32_t* out, size_t count) {
 #ifdef __AVX512F__
         const uint8_t* src = static_cast<const uint8_t*>(data);
         int32_t base;
@@ -183,7 +183,6 @@ private:
             
             __m512i result;
             if (offset + 16 * bits <= 512 && bits <= 32) {
-                size_t words_needed = (16 * bits + 63) / 64;
                 __m512i load = _mm512_loadu_si512(packed + word_start);
                 
                 if (bits == 1) {
@@ -277,7 +276,7 @@ private:
 #endif
     }
     
-    void DecodeAvx2_32(const void* data, size_t size, int32_t* out, size_t count) {
+    void DecodeAvx2_32(const void* data, size_t /*size*/, int32_t* out, size_t count) {
         const uint8_t* src = static_cast<const uint8_t*>(data);
         int32_t base;
         uint8_t bits;
@@ -388,7 +387,7 @@ class ForZigZagDecoder : public ForDecoder<T> {
     using UnsignedType = typename std::make_unsigned<ValueType>::type;
     
 public:
-    void Decode(const void* data, size_t size, ValueType* out, size_t count) {
+    void Decode(const void* data, size_t /*size*/, ValueType* out, size_t count) {
         if (count == 0) return;
         
         const uint8_t* src = static_cast<const uint8_t*>(data);

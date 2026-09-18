@@ -142,7 +142,7 @@ struct SimdOps<SimdLevel::AVX512VL> {
     static Vec Compress(Vec a, Mask m) { return _mm512_maskz_compress_epi32(m, a); }
     static Vec Expand(Vec a, Mask m) { return _mm512_maskz_expand_epi32(m, a); }
 
-    static Vec LoadMasked(const void* ptr, Mask m, Vec def) {
+    static Vec LoadMasked(const void* ptr, Mask m, Vec /*def*/) {
         return _mm512_maskz_loadu_epi32(m, ptr);
     }
     static void StoreMasked(void* ptr, Mask m, Vec v) {

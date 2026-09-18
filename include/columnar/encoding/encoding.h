@@ -96,7 +96,7 @@ public:
     virtual ~Encoder() = default;
     virtual EncodingType Type() const = 0;
     virtual void Encode(const void* data, size_t count, Buffer& out) = 0;
-    virtual void Finish(Buffer& out) {}
+    virtual void Finish(Buffer&) {}
 };
 
 class Decoder {
@@ -285,7 +285,7 @@ class BitPackDecoder : public Decoder {
 public:
     EncodingType Type() const override { return EncodingType::BitPack; }
     
-    void Decode(const void* data, size_t size, void* out, size_t count) override {
+    void Decode(const void* data, size_t /*size*/, void* out, size_t count) override {
         if (count == 0) return;
         const uint8_t* src = static_cast<const uint8_t*>(data);
         NativeType<T>* dst = static_cast<NativeType<T>*>(out);

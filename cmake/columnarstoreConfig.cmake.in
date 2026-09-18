@@ -1,0 +1,26 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(Threads)
+
+# Recreate imported compression targets for the consumer if not already present.
+if(NOT TARGET ZSTD::ZSTD)
+    find_library(COLUMNARSTORE_ZSTD_LIB NAMES zstd)
+    if(COLUMNARSTORE_ZSTD_LIB)
+        add_library(ZSTD::ZSTD UNKNOWN IMPORTED)
+        set_target_properties(ZSTD::ZSTD PROPERTIES IMPORTED_LOCATION "${COLUMNARSTORE_ZSTD_LIB}")
+    endif()
+endif()
+
+if(NOT TARGET LZ4::LZ4)
+    find_library(COLUMNARSTORE_LZ4_LIB NAMES lz4)
+    if(COLUMNARSTORE_LZ4_LIB)
+        add_library(LZ4::LZ4 UNKNOWN IMPORTED)
+        set_target_properties(LZ4::LZ4 PROPERTIES IMPORTED_LOCATION "${COLUMNARSTORE_LZ4_LIB}")
+    endif()
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/columnarstoreTargets.cmake")
+
+check_required_components(columnarstore)

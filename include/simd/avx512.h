@@ -154,12 +154,12 @@ inline float ReduceAdd(Vec512f v) { return _mm512_reduce_add_ps(v); }
 inline double ReduceAdd(Vec512d v) { return _mm512_reduce_add_pd(v); }
 
 inline int32_t ReduceMin(Vec512i v) { return _mm512_reduce_min_epi32(v); }
-inline int64_t ReduceMin(Vec512i v, Mask8 m) { return _mm512_reduce_min_epi64(v); }
+inline int64_t ReduceMin(Vec512i v, Mask8 /*m*/) { return _mm512_reduce_min_epi64(v); }
 inline float ReduceMin(Vec512f v) { return _mm512_reduce_min_ps(v); }
 inline double ReduceMin(Vec512d v) { return _mm512_reduce_min_pd(v); }
 
 inline int32_t ReduceMax(Vec512i v) { return _mm512_reduce_max_epi32(v); }
-inline int64_t ReduceMax(Vec512i v, Mask8 m) { return _mm512_reduce_max_epi64(v); }
+inline int64_t ReduceMax(Vec512i v, Mask8 /*m*/) { return _mm512_reduce_max_epi64(v); }
 inline float ReduceMax(Vec512f v) { return _mm512_reduce_max_ps(v); }
 inline double ReduceMax(Vec512d v) { return _mm512_reduce_max_pd(v); }
 

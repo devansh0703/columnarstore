@@ -69,7 +69,7 @@ public:
         }
         
         if (delta) {
-            delta->VisitInserts(column_index_, [&](uint64_t row_id, uint64_t ts, const std::vector<uint8_t>& data) {
+            delta->VisitInserts(column_index_, [&](uint64_t /*row_id*/, uint64_t ts, const std::vector<uint8_t>& data) {
                 ValueType value{};
                 std::memcpy(&value, data.data(), std::min(data.size(), sizeof(ValueType)));
                 all_values.push_back(value);

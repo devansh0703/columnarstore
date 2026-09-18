@@ -231,23 +231,51 @@ public:
 class BytecodeInterpreter {
     const BytecodeProgram& program_;
     std::vector<int64_t> stack_;
+    // Deferred AND/OR for eager (infix-style) programs, where PredicateBuilder
+    // emits the operator between its two operands instead of after them.
+    bool pending_and_ = false;
+    bool pending_or_ = false;
+    
+    void FoldPending() {
+        if (pending_and_ && stack_.size() >= 2) {
+            pending_and_ = false;
+            int64_t b = stack_.back(); stack_.pop_back();
+            int64_t a = stack_.back(); stack_.pop_back();
+            stack_.push_back((a && b) ? 1 : 0);
+        }
+        if (pending_or_ && stack_.size() >= 2) {
+            pending_or_ = false;
+            int64_t b = stack_.back(); stack_.pop_back();
+            int64_t a = stack_.back(); stack_.pop_back();
+            stack_.push_back((a || b) ? 1 : 0);
+        }
+    }
     
 public:
-    BytecodeInterpreter(const BytecodeProgram& prog, size_t vector_width = 16)
+    BytecodeInterpreter(const BytecodeProgram& prog, size_t /*vector_width*/ = 16)
         : program_(prog) {}
     
     void Execute(const std::vector<const void*>& columns, 
-                 const std::vector<const bool*>& nulls,
+                 const std::vector<const bool*>& /*nulls*/,
                  size_t count, bool* output) {
         for (size_t i = 0; i < count; ++i) {
-            stack_.clear();
-            
-            for (const auto& instr : program_.Instructions()) {
-                switch (instr.op) {
+            output[i] = EvaluateRow(columns, i);
+        }
+    }
+    
+    // Evaluate the program for a single row. The result is the final value left
+    // on the stack, or the value pushed by an explicit Return instruction.
+    bool EvaluateRow(const std::vector<const void*>& columns, size_t row) {
+        stack_.clear();
+        pending_and_ = false;
+        pending_or_ = false;
+        
+        for (const auto& instr : program_.Instructions()) {
+            switch (instr.op) {
                     case OpCode::LoadColumn: {
                         size_t col = program_.ColumnIndices()[instr.operand_a];
                         const int64_t* data = static_cast<const int64_t*>(columns[col]);
-                        stack_.push_back(data[i]);
+                        stack_.push_back(data[row]);
                         break;
                     }
                     case OpCode::LoadConst: {
@@ -259,36 +287,42 @@ public:
                         int64_t b = stack_.back(); stack_.pop_back();
                         int64_t a = stack_.back(); stack_.pop_back();
                         stack_.push_back(a == b ? 1 : 0);
+                        FoldPending();
                         break;
                     }
                     case OpCode::CompareNe: {
                         int64_t b = stack_.back(); stack_.pop_back();
                         int64_t a = stack_.back(); stack_.pop_back();
                         stack_.push_back(a != b ? 1 : 0);
+                        FoldPending();
                         break;
                     }
                     case OpCode::CompareLt: {
                         int64_t b = stack_.back(); stack_.pop_back();
                         int64_t a = stack_.back(); stack_.pop_back();
                         stack_.push_back(a < b ? 1 : 0);
+                        FoldPending();
                         break;
                     }
                     case OpCode::CompareLe: {
                         int64_t b = stack_.back(); stack_.pop_back();
                         int64_t a = stack_.back(); stack_.pop_back();
                         stack_.push_back(a <= b ? 1 : 0);
+                        FoldPending();
                         break;
                     }
                     case OpCode::CompareGt: {
                         int64_t b = stack_.back(); stack_.pop_back();
                         int64_t a = stack_.back(); stack_.pop_back();
                         stack_.push_back(a > b ? 1 : 0);
+                        FoldPending();
                         break;
                     }
                     case OpCode::CompareGe: {
                         int64_t b = stack_.back(); stack_.pop_back();
                         int64_t a = stack_.back(); stack_.pop_back();
                         stack_.push_back(a >= b ? 1 : 0);
+                        FoldPending();
                         break;
                     }
                     case OpCode::IsNull: {
@@ -302,15 +336,25 @@ public:
                         break;
                     }
                     case OpCode::And: {
-                        int64_t b = stack_.back(); stack_.pop_back();
-                        int64_t a = stack_.back(); stack_.pop_back();
-                        stack_.push_back((a && b) ? 1 : 0);
+                        if (stack_.size() >= 2) {
+                            // Postfix form: both operands already evaluated.
+                            int64_t b = stack_.back(); stack_.pop_back();
+                            int64_t a = stack_.back(); stack_.pop_back();
+                            stack_.push_back((a && b) ? 1 : 0);
+                        } else {
+                            // Eager form: right operand comes later; defer.
+                            pending_and_ = true;
+                        }
                         break;
                     }
                     case OpCode::Or: {
-                        int64_t b = stack_.back(); stack_.pop_back();
-                        int64_t a = stack_.back(); stack_.pop_back();
-                        stack_.push_back((a || b) ? 1 : 0);
+                        if (stack_.size() >= 2) {
+                            int64_t b = stack_.back(); stack_.pop_back();
+                            int64_t a = stack_.back(); stack_.pop_back();
+                            stack_.push_back((a || b) ? 1 : 0);
+                        } else {
+                            pending_or_ = true;
+                        }
                         break;
                     }
                     case OpCode::Not: {
@@ -320,13 +364,12 @@ public:
                     }
                     case OpCode::Return: {
                         int64_t result = stack_.back(); stack_.pop_back();
-                        output[i] = (result != 0);
-                        break;
+                        return result != 0;
                     }
                     case OpCode::LoadMask: {
                         size_t col = program_.ColumnIndices()[instr.operand_a];
                         const int64_t* data = static_cast<const int64_t*>(columns[col]);
-                        stack_.push_back(data[i]);
+                        stack_.push_back(data[row]);
                         break;
                     }
                     case OpCode::AndMask: {
@@ -348,7 +391,7 @@ public:
                     default: break;
                 }
             }
-        }
+            return !stack_.empty() && stack_.back() != 0;
     }
 };
 
@@ -361,7 +404,6 @@ public:
     static void EvaluateVector(const typename TypeTraits<T>::Type* data,
                                const typename TypeTraits<T>::Type* value,
                                bool* mask, size_t count) {
-        using ValueType = typename TypeTraits<T>::Type;
         using VecTraits = column::VectorTraits<T>;
         using Vec = typename VecTraits::Vec;
         

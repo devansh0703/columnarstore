@@ -29,8 +29,8 @@ class DeltaStore {
         
         size_t MemoryUsage() const {
             size_t usage = 0;
-            for (const auto& [_, p] : inserts) usage += p.second.size() + 16;
-            for (const auto& [_, ts] : deletes) usage += 16;
+            for (const auto& insert_entry : inserts) usage += insert_entry.second.second.size() + 16;
+            usage += deletes.size() * 16;
             return usage;
         }
     };

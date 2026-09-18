@@ -62,7 +62,7 @@ public:
         }
     }
     
-    void AddString(const char* data, size_t len) {
+    void AddString(const char* data, size_t /*len*/) {
         uint64_t h1 = MurmurHash64(reinterpret_cast<const uint64_t*>(data)[0], 0x9e3779b97f4a7c15ULL);
         uint64_t h2 = MurmurHash64(reinterpret_cast<const uint64_t*>(data)[0], 0xbf58476d1ce4e5b9ULL);
         
@@ -93,7 +93,7 @@ public:
         return true;
     }
     
-    bool MightContainString(const char* data, size_t len) const {
+    bool MightContainString(const char* data, size_t /*len*/) const {
         uint64_t h1 = MurmurHash64(reinterpret_cast<const uint64_t*>(data)[0], 0x9e3779b97f4a7c15ULL);
         uint64_t h2 = MurmurHash64(reinterpret_cast<const uint64_t*>(data)[0], 0xbf58476d1ce4e5b9ULL);
         
@@ -179,7 +179,7 @@ public:
         out.AppendArray(bits_.data(), bits_.size());
     }
     
-    static BloomFilter Read(const uint8_t* data, size_t size) {
+    static BloomFilter Read(const uint8_t* data, size_t /*size*/) {
         BloomFilter bf;
         const uint8_t* ptr = data;
         

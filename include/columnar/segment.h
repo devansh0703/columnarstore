@@ -255,8 +255,7 @@ public:
     
     void GetColumnData(size_t col, size_t offset, size_t count, void* out) const {
         DataType type = header_.columns[col].type;
-        EncodingType encoding = header_.columns[col].encoding;
-        
+
         auto column = GetColumn(col);
         
         switch (type) {

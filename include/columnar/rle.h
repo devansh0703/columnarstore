@@ -62,7 +62,7 @@ public:
         return sizeof(uint32_t) + runs_.size() * (sizeof(ValueType) + sizeof(uint32_t));
     }
     
-    static RleEncoder Read(const void* data, size_t size) {
+    static RleEncoder Read(const void* data, size_t /*size*/) {
         RleEncoder enc;
         const uint8_t* ptr = static_cast<const uint8_t*>(data);
         

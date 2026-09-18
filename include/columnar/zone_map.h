@@ -262,7 +262,7 @@ public:
         }
     }
     
-    static ZoneMap Read(const uint8_t* data, size_t size) {
+    static ZoneMap Read(const uint8_t* data, size_t /*size*/) {
         ZoneMap zm;
         const uint8_t* ptr = data;
         

@@ -79,6 +79,21 @@ public:
     }
 };
 
+namespace detail {
+
+// Widen a materialized column value to int64_t for bytecode evaluation.
+inline int64_t WidenValue(const void* data, DataType type, size_t index) {
+    switch (type) {
+        case DataType::Int32: return static_cast<int64_t>(static_cast<const int32_t*>(data)[index]);
+        case DataType::Int64: return static_cast<const int64_t*>(data)[index];
+        case DataType::Float: return static_cast<int64_t>(static_cast<const float*>(data)[index]);
+        case DataType::Double: return static_cast<int64_t>(static_cast<const double*>(data)[index]);
+        default: return 0;
+    }
+}
+
+}  // namespace detail
+
 template<DataType T>
 class VectorFilter {
     using ValueType = typename TypeTraits<T>::Type;
@@ -193,9 +208,9 @@ public:
         return bloom_filter_.MightContain(value);
     }
     
-    void ScanBlock(size_t block_idx, size_t offset, size_t count,
+    void ScanBlock(size_t /*block_idx*/, size_t offset, size_t count,
                    const void* filter_value, PredicateType pred,
-                   BlockFilter& mask, void* output) const {
+                   BlockFilter& mask, void* /*output*/) const {
         if (count == 0) return;
         
         DataType type = segment_->ColumnType(column_index_);
@@ -327,6 +342,8 @@ public:
         const auto& preds = predicate.ColumnPredicates();
         const auto& constants = predicate.Program().Constants();
         const auto& col_indices = predicate.Program().ColumnIndices();
+        const size_t num_columns = segment_->NumColumns();
+        predicate::BytecodeInterpreter interp(predicate.Program());
         
         for (size_t block = 0; block < num_blocks; ++block) {
             block_mask.Reset();
@@ -375,14 +392,29 @@ public:
             }
             
             // Scan each projected column
-            size_t proj_col = col_indices.empty() ? 0 : col_indices[0];
-            if (proj_col < column_scanners_.size()) {
-                const void* filter_val = constants.empty() ? nullptr : &constants[0];
-                PredicateType pred = preds.empty() ? PredicateType::Equal : preds[0];
-                column_scanners_[proj_col]->ScanBlock(block, block_offset, block_count,
-                                                     filter_val, pred, block_mask, nullptr);
+            // Evaluate the compiled predicate on every candidate row and
+            // deliver surviving rows (one pointer per projected column) to
+            // the output callback.
+            std::vector<int64_t> row_values(num_columns);
+            std::vector<const void*> row_ptrs(num_columns);
+
+            for (size_t i = 0; i < block_count; ++i) {
+                if (!block_mask.Data()[i]) continue;
+
+                for (size_t c = 0; c < num_columns; ++c) {
+                    segment_->GetColumnData(c, block_offset + i, 1, &row_values[c]);
+                }
+                for (size_t c = 0; c < num_columns; ++c) {
+                    row_ptrs[c] = &row_values[c];
+                }
+
+                // Each row_ptrs slot holds exactly one widened value, so the
+                // interpreter reads index 0 of every column buffer.
+                if (interp.EvaluateRow(row_ptrs, 0)) {
+                    output(row_ptrs.data(), 1);
+                }
             }
-            
+
             size_t matched = block_mask.CountTrue();
             stats_.rows_filtered += block_count - matched;
             stats_.rows_returned += matched;

@@ -83,7 +83,7 @@ public:
         out.AppendArray(data.packed.data(), data.packed.size());
     }
     
-    static BitPackedData Read(const uint8_t* data, size_t size) {
+    static BitPackedData Read(const uint8_t* data, size_t /*size*/) {
         BitPackedData result;
         const uint8_t* ptr = data;
         

@@ -227,6 +227,13 @@ public:
     }
     
     static Scalar Sum(const Scalar* data, size_t n) {
+#if defined(__AVX512F__) && defined(__GNUC__) && !defined(__clang__)
+        // GCC warns about intrinsic vector types used as template arguments here
+        // (__m512i etc. carry ABI attributes that are ignored in template deduction).
+        // The is_same_v branches below dispatch correctly regardless.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-attributes"
+#endif
         Scalar sum = 0;
         for (size_t i = 0; i + Traits::Width <= n; i += Traits::Width) {
             Vec v = Traits::Load(data + i);
@@ -246,9 +253,16 @@ public:
         }
         for (size_t i = n - n % Traits::Width; i < n; ++i) sum += data[i];
         return sum;
+#if defined(__AVX512F__) && defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
     }
     
     static Scalar Min(const Scalar* data, size_t n) {
+#if defined(__AVX512F__) && defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-attributes"
+#endif
         Scalar min_val = data[0];
         for (size_t i = 0; i + Traits::Width <= n; i += Traits::Width) {
             Vec v = Traits::Load(data + i);
@@ -268,9 +282,16 @@ public:
         }
         for (size_t i = n - n % Traits::Width; i < n; ++i) min_val = std::min(min_val, data[i]);
         return min_val;
+#if defined(__AVX512F__) && defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
     }
     
     static Scalar Max(const Scalar* data, size_t n) {
+#if defined(__AVX512F__) && defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-attributes"
+#endif
         Scalar max_val = data[0];
         for (size_t i = 0; i + Traits::Width <= n; i += Traits::Width) {
             Vec v = Traits::Load(data + i);
@@ -290,6 +311,9 @@ public:
         }
         for (size_t i = n - n % Traits::Width; i < n; ++i) max_val = std::max(max_val, data[i]);
         return max_val;
+#if defined(__AVX512F__) && defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
     }
 };
 

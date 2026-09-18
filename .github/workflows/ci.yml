@@ -18,7 +18,7 @@ jobs:
           sudo apt-get install -y cmake g++ ninja-build libzstd-dev liblz4-dev clang-tidy
 
       - name: Configure
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=OFF -DENABLE_AVX512=OFF
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=OFF -DCOLUMNARSTORE_BUILD_EXAMPLES=ON -DENABLE_AVX512=OFF
 
       - name: Build (warnings as errors)
         run: cmake --build build --parallel $(nproc) 2>&1 | tee build.log
@@ -43,6 +43,81 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      - name: Run example
+        run: ./build/examples/basic_scan
+
+  sanitizer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ ninja-build libzstd-dev liblz4-dev libgtest-dev libbenchmark-dev
+
+      # Debug builds enable -fsanitize=address,undefined (see CMakeLists.txt)
+      - name: Configure (ASan + UBSan)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DBUILD_BENCHMARKS=OFF -DCOLUMNARSTORE_BUILD_EXAMPLES=OFF -DENABLE_AVX512=OFF
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Test under sanitizers
+        run: ctest --test-dir build --output-on-failure
+        env:
+          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1"
+
+  install:
+    # Verify the library installs and consumable CMake package works downstream
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ ninja-build libzstd-dev liblz4-dev libgtest-dev
+
+      - name: Configure and build
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=OFF -DBUILD_BENCHMARKS=OFF -DCOLUMNARSTORE_BUILD_EXAMPLES=OFF
+          cmake --build build --parallel $(nproc)
+
+      - name: Install
+        run: cmake --install build --prefix /tmp/columnarstore-install
+
+      - name: Consumer smoke test (find_package)
+        run: |
+          mkdir -p /tmp/consumer && cd /tmp/consumer
+          cat > CMakeLists.txt <<'EOF'
+          cmake_minimum_required(VERSION 3.20)
+          project(consumer CXX)
+          set(CMAKE_CXX_STANDARD 20)
+          set(CMAKE_CXX_STANDARD_REQUIRED ON)
+          find_package(columnarstore REQUIRED)
+          add_executable(consumer main.cpp)
+          target_link_libraries(consumer PRIVATE columnarstore::columnarstore)
+          EOF
+          cat > main.cpp <<'EOF'
+          #include <columnar/segment.h>
+          #include <columnar/types.h>
+          #include <vector>
+          using namespace columnar;
+          int main() {
+              std::vector<int32_t> data(10, 0);
+              auto writer = SegmentWriter("/tmp/consumer.col");
+              writer.AddColumn<DataType::Int32>(data, std::vector<bool>(10, false), EncodingType::Plain);
+              auto seg = writer.Finish();
+              auto opened = Segment::Open("/tmp/consumer.col");
+              return opened->NumRows() == 10 ? 0 : 1;
+          }
+          EOF
+          cmake -B build -DCMAKE_PREFIX_PATH=/tmp/columnarstore-install
+          cmake --build build
+          ./build/consumer
 
   docker:
     runs-on: ubuntu-latest
