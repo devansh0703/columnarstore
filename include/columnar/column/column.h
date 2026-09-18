@@ -510,6 +510,10 @@ public:
     virtual std::unique_ptr<encoding::Encoder> CreateEncoder(EncodingType type) const = 0;
     virtual void Encode(encoding::Encoder* encoder, encoding::Buffer& out) const = 0;
     virtual void Decode(encoding::Decoder* decoder, const void* data, size_t size) = 0;
+
+    // Read `count` fixed-size values starting at `offset` into `out`.
+    // Values are stored contiguously (element size = TypeSize(Type())).
+    virtual void ReadValues(size_t offset, size_t count, void* out) const = 0;
 };
 
 template<DataType T>
@@ -593,6 +597,10 @@ public:
     template<PredicateType Pred>
     void FilterVector(const Native* value, bool* mask) const {
         data_.template Filter<Pred>(value, mask);
+    }
+    
+    void ReadValues(size_t offset, size_t count, void* out) const override {
+        std::memcpy(out, data_.Data() + offset, count * sizeof(Native));
     }
     
     void Sum(Native& result) const {

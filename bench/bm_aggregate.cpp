@@ -1,6 +1,8 @@
 #include <benchmark/benchmark.h>
 #include <columnar/column/column.h>
+#ifdef __AVX512F__
 #include <simd/avx512.h>
+#endif
 #include <simd/avx2.h>
 #include <simd/dispatch.h>
 #include <vector>
@@ -125,6 +127,7 @@ static void BM_VectorMulFloat(benchmark::State& state) {
     state.SetItemsProcessed(state.iterations() * 8192);
 }
 
+#ifdef __AVX512F__
 static void BM_Avx512PrefixSum(benchmark::State& state) {
     std::vector<int32_t> data(8192);
     std::mt19937 gen(42);
@@ -143,7 +146,9 @@ static void BM_Avx512PrefixSum(benchmark::State& state) {
     }
     state.SetItemsProcessed(state.iterations() * 8192);
 }
+#endif  // __AVX512F__
 
+#ifdef __AVX512VL__
 static void BM_Avx512Compress(benchmark::State& state) {
     std::vector<int32_t> data(8192);
     std::vector<int32_t> out(8192);
@@ -163,7 +168,9 @@ static void BM_Avx512Compress(benchmark::State& state) {
     }
     state.SetItemsProcessed(state.iterations() * 8192);
 }
+#endif
 
+#ifdef __AVX512F__
 static void BM_Avx512ConflictDetect(benchmark::State& state) {
     std::vector<int32_t> data(8192);
     std::mt19937 gen(42);
@@ -182,6 +189,7 @@ static void BM_Avx512ConflictDetect(benchmark::State& state) {
     }
     state.SetItemsProcessed(state.iterations() * 8192);
 }
+#endif  // __AVX512F__
 
 static void BM_Avx2PrefixSum(benchmark::State& state) {
     std::vector<int32_t> data(8192);
@@ -210,9 +218,13 @@ BENCHMARK(BM_VectorMinMaxInt32);
 BENCHMARK(BM_VectorMinMaxFloat);
 BENCHMARK(BM_VectorAddInt32);
 BENCHMARK(BM_VectorMulFloat);
-BENCHMARK(BM_Avx512PrefixSum);
-BENCHMARK(BM_Avx512Compress);
-BENCHMARK(BM_Avx512ConflictDetect);
 BENCHMARK(BM_Avx2PrefixSum);
+#ifdef __AVX512F__
+BENCHMARK(BM_Avx512PrefixSum);
+#ifdef __AVX512VL__
+BENCHMARK(BM_Avx512Compress);
+#endif
+BENCHMARK(BM_Avx512ConflictDetect);
+#endif
 
 BENCHMARK_MAIN();

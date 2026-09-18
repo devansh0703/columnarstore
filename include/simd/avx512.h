@@ -1,5 +1,11 @@
 #pragma once
 
+// This header exposes raw AVX-512 intrinsics; it is only compilable when the
+// translation unit was built with -mavx512f (benchmarks opt in explicitly).
+#ifndef __AVX512F__
+#error "simd/avx512.h requires AVX-512 support: compile with -mavx512f"
+#endif
+
 #include <simd/dispatch.h>
 #include <immintrin.h>
 
@@ -82,8 +88,10 @@ inline int PopCount(Mask8 m) { return _mm_popcnt_u32(m); }
 inline Vec512i MaskzLoad(const void* ptr, Mask16 m) { return _mm512_maskz_loadu_epi32(m, ptr); }
 inline void MaskStore(void* ptr, Mask16 m, Vec512i v) { _mm512_mask_storeu_epi32(ptr, m, v); }
 
+#ifdef __AVX512VL__
 inline Vec512i Compress(Vec512i a, Mask16 m) { return _mm512_maskz_compress_epi32(m, a); }
 inline Vec512i Expand(Vec512i a, Mask16 m) { return _mm512_maskz_expand_epi32(m, a); }
+#endif
 
 inline Vec512i ConflictDetect(Vec512i a) {
     // Fallback: scalar conflict detection

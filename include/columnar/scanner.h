@@ -344,6 +344,15 @@ public:
         const auto& col_indices = predicate.Program().ColumnIndices();
         const size_t num_columns = segment_->NumColumns();
         predicate::BytecodeInterpreter interp(predicate.Program());
+
+        // Cache materialized column pointers once: avoids a mutex-guarded
+        // cache lookup plus a type switch for every row/run delivery.
+        std::vector<std::shared_ptr<ColumnBase>> columns(num_columns);
+        std::vector<ColumnBase*> col_ptrs(num_columns);
+        for (size_t c = 0; c < num_columns; ++c) {
+            columns[c] = segment_->GetColumn(c);
+            col_ptrs[c] = columns[c].get();
+        }
         
         for (size_t block = 0; block < num_blocks; ++block) {
             block_mask.Reset();
@@ -391,33 +400,80 @@ public:
                 }
             }
             
-            // Scan each projected column
-            // Evaluate the compiled predicate on every candidate row and
-            // deliver surviving rows (one pointer per projected column) to
-            // the output callback.
+            const bool fast_path = (preds.size() == 1 && col_indices.size() == 1 &&
+                                    constants.size() == 1);
             std::vector<int64_t> row_values(num_columns);
             std::vector<const void*> row_ptrs(num_columns);
+            std::vector<uint32_t> match_rows;
+            std::vector<std::vector<uint8_t>> scratch(num_columns);
 
-            for (size_t i = 0; i < block_count; ++i) {
-                if (!block_mask.Data()[i]) continue;
-
-                for (size_t c = 0; c < num_columns; ++c) {
-                    segment_->GetColumnData(c, block_offset + i, 1, &row_values[c]);
-                }
-                for (size_t c = 0; c < num_columns; ++c) {
-                    row_ptrs[c] = &row_values[c];
-                }
-
-                // Each row_ptrs slot holds exactly one widened value, so the
-                // interpreter reads index 0 of every column buffer.
-                if (interp.EvaluateRow(row_ptrs, 0)) {
-                    output(row_ptrs.data(), 1);
-                }
+            // SIMD prefilter on the predicate column. For a single-column
+            // predicate the resulting mask IS the final answer (the bytecode
+            // program encodes the same comparison), so surviving rows are
+            // delivered without running the interpreter — this is the hot
+            // path for filters like "WHERE col < K". For multi-column
+            // predicates we skip the prefilter: with OR semantics a
+            // single-column mask could drop rows that only the other operand
+            // matches, so the interpreter adjudicates every row instead.
+            if (fast_path) {
+                column_scanners_[col_indices[0]]->ScanBlock(
+                    block, block_offset, block_count, &constants[0], preds[0],
+                    block_mask, nullptr);
             }
 
-            size_t matched = block_mask.CountTrue();
-            stats_.rows_filtered += block_count - matched;
-            stats_.rows_returned += matched;
+            // Compact surviving row indices.
+            match_rows.clear();
+            for (size_t i = 0; i < block_count; ++i) {
+                if (block_mask.Data()[i]) match_rows.push_back(static_cast<uint32_t>(i));
+            }
+
+            // Slow path: let the interpreter decide which candidates survive.
+            if (!fast_path) {
+                uint8_t raw[8];
+                size_t kept = 0;
+                for (size_t k = 0; k < match_rows.size(); ++k) {
+                    const size_t i = match_rows[k];
+                    for (size_t c = 0; c < num_columns; ++c) {
+                        col_ptrs[c]->ReadValues(block_offset + i, 1, raw);
+                        row_values[c] = detail::WidenValue(raw, segment_->ColumnType(c), 0);
+                        row_ptrs[c] = &row_values[c];
+                    }
+                    if (interp.EvaluateRow(row_ptrs, 0)) {
+                        match_rows[kept++] = static_cast<uint32_t>(i);
+                    }
+                }
+                match_rows.resize(kept);
+            }
+
+            // Deliver in consecutive runs: one bulk decode per column per run
+            // and ONE callback per run. Random matches degrade to small runs
+            // (still batched); clustered matches (sorted keys, ranges) produce
+            // very large runs, which is where columnar layouts shine.
+            constexpr size_t kMaxRun = 4096;
+            size_t delivered = 0;
+            size_t pos = 0;
+            while (pos < match_rows.size()) {
+                size_t run_end = pos + 1;
+                while (run_end < match_rows.size() &&
+                       match_rows[run_end] == match_rows[run_end - 1] + 1 &&
+                       run_end - pos < kMaxRun) {
+                    ++run_end;
+                }
+                const size_t n = run_end - pos;
+                const size_t row0 = block_offset + match_rows[pos];
+                for (size_t c = 0; c < num_columns; ++c) {
+                    const size_t esz = TypeSize(segment_->ColumnType(c));
+                    scratch[c].resize(n * esz);
+                    col_ptrs[c]->ReadValues(row0, n, scratch[c].data());
+                    row_ptrs[c] = scratch[c].data();
+                }
+                output(row_ptrs.data(), n);
+                delivered += n;
+                pos = run_end;
+            }
+
+            stats_.rows_filtered += block_count - delivered;
+            stats_.rows_returned += delivered;
         }
         
         auto end = std::chrono::high_resolution_clock::now();

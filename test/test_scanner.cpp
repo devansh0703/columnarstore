@@ -246,6 +246,41 @@ TEST(ScannerTest, SegmentScannerReturnsMatchingRows) {
     std::filesystem::remove(path);
 }
 
+TEST(ScannerTest, SegmentScannerSingleColumnFastPath) {
+    // Single-column predicate: the SIMD mask is the exact result, rows must
+    // be delivered without the bytecode interpreter.
+    std::string path = "/tmp/test_scanner_fast.col";
+
+    constexpr size_t kRows = 8192;
+    std::vector<int32_t> data(kRows);
+    for (size_t i = 0; i < kRows; ++i) data[i] = static_cast<int32_t>(i);
+
+    auto writer = SegmentWriter(path);
+    writer.AddColumn<DataType::Int32>(data, std::vector<bool>(kRows, false), EncodingType::Plain);
+    writer.Finish();
+    auto opened = Segment::Open(path);
+    ASSERT_NE(opened, nullptr);
+
+    auto pred = PredicateBuilder().Lt<DataType::Int32>(0, 100).Build();
+
+    ScanContext ctx;
+    ctx.enable_zone_map_pruning = false;
+    ctx.enable_bloom_filter = false;
+
+    SegmentScanner scanner(opened, ctx);
+    std::vector<int32_t> matched;
+    scanner.Scan(*pred, [&](const void** cols, size_t count) {
+        auto* vals = static_cast<const int32_t*>(cols[0]);
+        for (size_t r = 0; r < count; ++r) matched.push_back(vals[r]);
+    });
+
+    ASSERT_EQ(matched.size(), 100u);
+    EXPECT_EQ(matched.front(), 0);
+    EXPECT_EQ(matched.back(), 99);
+
+    std::filesystem::remove(path);
+}
+
 TEST(ScannerTest, ScanContext) {
     ScanContext ctx;
     ctx.block_size = 4096;

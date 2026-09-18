@@ -175,12 +175,15 @@ Supported operations: arithmetic, comparison, bitwise, shuffle, blend, mask oper
 
 ## Performance
 
-Typical throughput on modern CPUs (AVX-512):
+Measured with `bench/bm_compare.cpp` — see [BENCHMARKS.md](BENCHMARKS.md) for
+tables, methodology, and honest limits. Headlines (1M int32 rows, AVX2 CPU,
+GCC 15, Release):
 
-- **Encoding**: 1-3 GB/s per column
-- **Scanning (filtered)**: 500M-2B rows/sec
-- **Aggregation**: 2-5B rows/sec
-- **Compression ratio**: 3-10x typical
+- **~1.09 G rows/s** end-to-end scan at ~1% selectivity (4.2x a scalar scan)
+- **13.6x speedup** from zone-map pruning on clustered keys
+- 2.5 G rows/s raw SIMD filter kernel; 5 G rows/s memcpy bandwidth ceiling
+- High-selectivity scans with random matches are currently delivery-bound
+  (~86 M rows/s) — see the honest breakdown in BENCHMARKS.md
 
 ## Versioning
 

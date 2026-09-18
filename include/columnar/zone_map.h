@@ -71,7 +71,8 @@ struct ZoneMapEntry {
     
     template<DataType T, PredicateType Pred>
     bool CanMatch(const typename TypeTraits<T>::Type& value) const {
-        if (!has_min_max && row_count > 0) return true;
+        // Without min/max stats we cannot prove a non-match: default to scan.
+        if (!has_min_max) return true;
         
         if (Pred == PredicateType::IsNull) return has_nulls;
         if (Pred == PredicateType::IsNotNull) return row_count > null_count;
@@ -191,7 +192,8 @@ public:
     }
     
     bool ShouldScanBlock(size_t block_idx, DataType type, PredicateType pred, const void* value) const {
-        if (block_idx >= entries_.size()) return false;
+        // No stats for this block: we cannot prove a non-match, so scan it.
+        if (block_idx >= entries_.size()) return true;
         
         switch (type) {
             case DataType::Int32:

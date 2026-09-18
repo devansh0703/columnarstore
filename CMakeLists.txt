@@ -19,6 +19,32 @@ option(BUILD_BENCHMARKS "Build benchmarks" ON)
 option(COLUMNARSTORE_BUILD_EXAMPLES "Build example programs" ON)
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 option(ENABLE_AVX512 "Enable AVX-512 optimizations" ON)
+option(COLUMNARSTORE_FORCE_AVX512 "Skip CPU probe and force ENABLE_AVX512 as given" OFF)
+
+# AVX-512 code is compiled in when the flag is on, so the binary must only run
+# on CPUs that support it. Probe the build host unless the caller opts out via
+# -DCOLUMNARSTORE_FORCE_AVX512=ON (e.g. building on one machine for a fleet
+# that is known to have AVX-512).
+if(ENABLE_AVX512 AND NOT COLUMNARSTORE_FORCE_AVX512)
+    include(CheckCXXSourceRuns)
+    set(CMAKE_REQUIRED_FLAGS "-mavx512f")
+    check_cxx_source_runs("
+        int main() {
+        #if defined(__x86_64__) && defined(__GNUC__)
+            return __builtin_cpu_supports(\"avx512f\")
+                && __builtin_cpu_supports(\"avx512bw\")
+                && __builtin_cpu_supports(\"avx512vl\") ? 0 : 1;
+        #else
+            return 1;
+        #endif
+        }" COLUMNARSTORE_CPU_HAS_AVX512)
+    unset(CMAKE_REQUIRED_FLAGS)
+    if(NOT COLUMNARSTORE_CPU_HAS_AVX512)
+        message(STATUS "Build host does not support AVX-512 — disabling ENABLE_AVX512 "
+                       "(force with -DCOLUMNARSTORE_FORCE_AVX512=ON)")
+        set(ENABLE_AVX512 OFF)
+    endif()
+endif()
 
 include(GNUInstallDirs)
 include(FetchContent)

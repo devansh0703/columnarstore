@@ -10,7 +10,8 @@ target_link_libraries(bm_encoding PRIVATE
 )
 
 target_compile_options(bm_encoding PRIVATE
-    $<$<CXX_COMPILER_ID:GNU,Clang>:-mavx2 -mfma -mavx512f -mavx512bw -mavx512vl>
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-mavx2 -mfma>
+    $<$<BOOL:${ENABLE_AVX512}>:-mavx512f -mavx512bw -mavx512vl>
 )
 
 add_executable(bm_scan
@@ -23,7 +24,8 @@ target_link_libraries(bm_scan PRIVATE
 )
 
 target_compile_options(bm_scan PRIVATE
-    $<$<CXX_COMPILER_ID:GNU,Clang>:-mavx2 -mfma -mavx512f -mavx512bw -mavx512vl>
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-mavx2 -mfma>
+    $<$<BOOL:${ENABLE_AVX512}>:-mavx512f -mavx512bw -mavx512vl>
 )
 
 add_executable(bm_filter
@@ -36,7 +38,8 @@ target_link_libraries(bm_filter PRIVATE
 )
 
 target_compile_options(bm_filter PRIVATE
-    $<$<CXX_COMPILER_ID:GNU,Clang>:-mavx2 -mfma -mavx512f -mavx512bw -mavx512vl>
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-mavx2 -mfma>
+    $<$<BOOL:${ENABLE_AVX512}>:-mavx512f -mavx512bw -mavx512vl>
 )
 
 add_executable(bm_aggregate
@@ -49,5 +52,20 @@ target_link_libraries(bm_aggregate PRIVATE
 )
 
 target_compile_options(bm_aggregate PRIVATE
-    $<$<CXX_COMPILER_ID:GNU,Clang>:-mavx2 -mfma -mavx512f -mavx512bw -mavx512vl>
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-mavx2 -mfma>
+    $<$<BOOL:${ENABLE_AVX512}>:-mavx512f -mavx512bw -mavx512vl>
+)
+
+add_executable(bm_compare
+    bm_compare.cpp
+)
+
+target_link_libraries(bm_compare PRIVATE
+    columnarstore
+    benchmark::benchmark
+)
+
+target_compile_options(bm_compare PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-mavx2 -mfma>
+    $<$<BOOL:${ENABLE_AVX512}>:-mavx512f -mavx512bw -mavx512vl>
 )

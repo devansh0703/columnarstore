@@ -139,6 +139,10 @@ struct SimdOps<SimdLevel::AVX512VL> {
     static Vec Not(Vec a) { return _mm512_xor_si512(a, _mm512_set1_epi32(-1)); }
 
     static int PopCount(Mask m) { return _mm_popcnt_u64(m); }
+
+    // These intrinsics require AVX512VL (not just AVX512F); only provide them
+    // when the compiler was invoked with -mavx512vl.
+#ifdef __AVX512VL__
     static Vec Compress(Vec a, Mask m) { return _mm512_maskz_compress_epi32(m, a); }
     static Vec Expand(Vec a, Mask m) { return _mm512_maskz_expand_epi32(m, a); }
 
@@ -148,6 +152,7 @@ struct SimdOps<SimdLevel::AVX512VL> {
     static void StoreMasked(void* ptr, Mask m, Vec v) {
         _mm512_mask_storeu_epi32(ptr, m, v);
     }
+#endif
 };
 
 template<>
